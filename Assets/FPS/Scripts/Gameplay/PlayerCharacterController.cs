@@ -7,6 +7,10 @@ namespace Unity.FPS.Gameplay
     [RequireComponent(typeof(CharacterController), typeof(PlayerInputHandler), typeof(AudioSource))]
     public class PlayerCharacterController : MonoBehaviour
     {
+        #region CONST
+        private const float NORMAL_FOV = 60f;
+        private const float HOOKSHOT_FOV = 100f;
+        #endregion
         #region Variables
         [Header("References")] [Tooltip("Reference to the main camera used for the player")]
         public Camera PlayerCamera;
@@ -135,14 +139,20 @@ namespace Unity.FPS.Gameplay
         const float k_GroundCheckDistanceInAir = 0.07f;
 
         [Header("HookShot")]
+        public CameraFOV cameraFov;
         public Transform debugHitPointTransform;
-        private State state;
+        public Vector3 characterVelocityMomentum;
         public Vector3 hookshotPos;
+        public Transform hookshotTransform;
+        public float hookshotSize;
+        public ParticleSystem hookshotParticleSystem;
 
+        [SerializeField] private State state;
         private enum State
         {
             Normal,
-            HookShotFlyingPlayer
+            HookShotFlyingPlayer,
+            HookShotThrown
         }
         #endregion
 
@@ -152,7 +162,9 @@ namespace Unity.FPS.Gameplay
             if (actorsManager != null)
                 actorsManager.SetPlayer(gameObject);
 
+            cameraFov = PlayerCamera.GetComponent<CameraFOV>();
             state = State.Normal;
+            hookshotTransform.gameObject.SetActive(false);
         }
 
         void Start()
@@ -235,6 +247,11 @@ namespace Unity.FPS.Gameplay
                     HandleCharacterLook();
                     HandleCharacterMovement();
                     HandleHookShotStart();
+                    break;
+                case State.HookShotThrown:
+                    HandleHookshotThrown();
+                    HandleCharacterLook();
+                    HandleHookShotMovement();
                     break;
                 case State.HookShotFlyingPlayer:
                     HandleCharacterLook();
@@ -401,6 +418,11 @@ namespace Unity.FPS.Gameplay
             // apply the final calculated velocity value as a character movement
             Vector3 capsuleBottomBeforeMove = GetCapsuleBottomHemisphere();
             Vector3 capsuleTopBeforeMove = GetCapsuleTopHemisphere(m_Controller.height);
+
+            // apply momentum
+            CharacterVelocity += characterVelocityMomentum;
+
+            // move character controller
             m_Controller.Move(CharacterVelocity * Time.deltaTime);
 
             // detect obstructions to adjust velocity accordingly
@@ -413,6 +435,19 @@ namespace Unity.FPS.Gameplay
                 m_LatestImpactSpeed = CharacterVelocity;
 
                 CharacterVelocity = Vector3.ProjectOnPlane(CharacterVelocity, hit.normal);
+            }
+
+            // dampen momentum
+            if(characterVelocityMomentum.magnitude > 0f)
+            {
+                float momentumDrag = 3f;
+                characterVelocityMomentum -= characterVelocityMomentum * momentumDrag * Time.deltaTime;
+                
+            }
+            if (characterVelocityMomentum.magnitude < 0f)
+            {
+                Debug.Log("Reset to Zero");
+                characterVelocityMomentum = Vector3.zero;
             }
         }
 
@@ -505,6 +540,11 @@ namespace Unity.FPS.Gameplay
         }
 
         // My Code
+        private bool TestInputDownHookShot()
+        {
+            return Input.GetKeyDown(KeyCode.F);
+        }
+
         private void ResetGravityEffect()
         {
             CharacterVelocity = new Vector3(0, 0, 0);
@@ -512,19 +552,41 @@ namespace Unity.FPS.Gameplay
 
         private void HandleHookShotStart()
         {
-            if (Input.GetKeyDown(KeyCode.E))
+            if (TestInputDownHookShot())
             {
                 if(Physics.Raycast(PlayerCamera.transform.position, PlayerCamera.transform.forward, out RaycastHit raycastHit))
                 {
                     debugHitPointTransform.position = raycastHit.point;
                     hookshotPos = raycastHit.point;
-                    state = State.HookShotFlyingPlayer;
+                    hookshotSize = 0;
+                    hookshotTransform.gameObject.SetActive(true);
+                    hookshotTransform.localScale = Vector3.zero;
+                    state = State.HookShotThrown;
                 }
+            }
+        }
+
+        private void HandleHookshotThrown()
+        {
+            hookshotTransform.LookAt(hookshotPos);
+
+            float hookshotThroughSpeed = 10f;
+            hookshotSize += hookshotThroughSpeed * Time.deltaTime;
+
+            hookshotTransform.localScale = new Vector3(1, 1, hookshotSize);
+
+            if(hookshotSize >= Vector3.Distance(transform.position, hookshotPos))
+            {
+                state = State.HookShotFlyingPlayer;
+                cameraFov.SetCameraFov(HOOKSHOT_FOV);
+                hookshotParticleSystem.Play();
             }
         }
 
         private void HandleHookShotMovement()
         {
+            hookshotTransform.LookAt(hookshotPos);
+
             Vector3 hookShotDir = (hookshotPos - transform.position).normalized;
 
             float minHookshotSpeed = 10f;
@@ -538,9 +600,33 @@ namespace Unity.FPS.Gameplay
             float reachedHookShotPosDis = 1f;
             if(Vector3.Distance(transform.position , hookshotPos) < reachedHookShotPosDis)
             {
-                state = State.Normal;
-                ResetGravityEffect();
+                HookShotStop();
             }
+
+            if (TestInputDownHookShot())
+            {
+                //Cancel Hook Shot
+                HookShotStop();
+            }
+
+            if (m_InputHandler.GetJumpInputDown())
+            {
+                //Cancel with Jump
+                float momentumExtraSpeed = 3f;
+                characterVelocityMomentum = hookShotDir * momentumExtraSpeed;
+                float jumpSpeed = 0.05f;
+                characterVelocityMomentum += Vector3.up * jumpSpeed;
+                HookShotStop();
+            }
+        }
+
+        private void HookShotStop()
+        {
+            state = State.Normal;
+            ResetGravityEffect();
+            hookshotTransform.gameObject.SetActive(false);
+            cameraFov.SetCameraFov(NORMAL_FOV);
+            hookshotParticleSystem.Stop();
         }
     }
 }
