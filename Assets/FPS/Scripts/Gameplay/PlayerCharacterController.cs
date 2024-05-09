@@ -139,7 +139,7 @@ namespace Unity.FPS.Gameplay
         const float k_GroundCheckDistanceInAir = 0.07f;
 
         [Header("HookShot")]
-        public CameraFOV cameraFov;
+        //public CameraFOV cameraFov;
         public Transform debugHitPointTransform;
         public Vector3 characterVelocityMomentum;
         public Vector3 hookshotPos;
@@ -162,7 +162,7 @@ namespace Unity.FPS.Gameplay
             if (actorsManager != null)
                 actorsManager.SetPlayer(gameObject);
 
-            cameraFov = PlayerCamera.GetComponent<CameraFOV>();
+            //cameraFov = PlayerCamera.GetComponent<CameraFOV>();
             state = State.Normal;
             hookshotTransform.gameObject.SetActive(false);
         }
@@ -251,7 +251,6 @@ namespace Unity.FPS.Gameplay
                 case State.HookShotThrown:
                     HandleHookshotThrown();
                     HandleCharacterLook();
-                    HandleHookShotMovement();
                     break;
                 case State.HookShotFlyingPlayer:
                     HandleCharacterLook();
@@ -570,7 +569,7 @@ namespace Unity.FPS.Gameplay
         {
             hookshotTransform.LookAt(hookshotPos);
 
-            float hookshotThroughSpeed = 10f;
+            float hookshotThroughSpeed = 50f;
             hookshotSize += hookshotThroughSpeed * Time.deltaTime;
 
             hookshotTransform.localScale = new Vector3(1, 1, hookshotSize);
@@ -578,7 +577,7 @@ namespace Unity.FPS.Gameplay
             if(hookshotSize >= Vector3.Distance(transform.position, hookshotPos))
             {
                 state = State.HookShotFlyingPlayer;
-                cameraFov.SetCameraFov(HOOKSHOT_FOV);
+                //cameraFov.SetCameraFov(HOOKSHOT_FOV);
                 hookshotParticleSystem.Play();
             }
         }
@@ -625,7 +624,7 @@ namespace Unity.FPS.Gameplay
             state = State.Normal;
             ResetGravityEffect();
             hookshotTransform.gameObject.SetActive(false);
-            cameraFov.SetCameraFov(NORMAL_FOV);
+            //cameraFov.SetCameraFov(NORMAL_FOV);
             hookshotParticleSystem.Stop();
         }
     }
